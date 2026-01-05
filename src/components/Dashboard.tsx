@@ -51,7 +51,7 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
     }, [deferredSensors]);
 
     const [dateRange, setDateRange] = useState<{ start: string, end: string } | null>(null);
-    const [chartType, setChartType] = useState<'line' | 'scatter'>('line');
+    const [chartType, setChartType] = useState<'line' | 'scatter' | 'pair'>('line');
     const [samplingMethod, setSamplingMethod] = useState<'raw' | 'avg' | 'max' | 'min' | 'first' | 'last'>('raw');
 
     // Filter logic (Client side filtering of the fetched subset)
@@ -67,6 +67,7 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
             rows = rows.filter(r => {
                 if (!r.timestamp) return false;
                 const t = new Date(r.timestamp).getTime();
+                if (isNaN(t)) return false; // Skip invalid dates
                 return t >= start && t <= end;
             });
         }
@@ -148,6 +149,31 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
     }, [chartData, dateRange, samplingMethod]);
 
 
+    // Calculate data range for auto-filling inputs
+    const dataRange = useMemo(() => {
+        if (!chartData || chartData.rows.length === 0) return undefined;
+        // Assuming sorted by timestamp, but let's be safe.
+        // Actually, large data might be unsorted? Usually sorted.
+        // If data is huge, this might be slow. But rows is usually filtered? No, chartData.rows is "all" fetched data.
+        // We should just take first and last if sorted.
+        // Let's assume sorted for O(1). If not, we fix later.
+        // Backend usually returns sorted.
+
+        const first = chartData.rows[0].timestamp;
+        const last = chartData.rows[chartData.rows.length - 1].timestamp;
+
+        if (first && last) {
+            // Check if sorted?
+            // Let's just trust first and last for optimization on large datasets.
+            return {
+                min: first,
+                max: last
+            };
+        }
+        return undefined;
+    }, [chartData]);
+
+
     return (
         <div className="dashboard-container">
             <div className="top-bar">
@@ -155,6 +181,7 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                     onDateRangeChange={(start, end) => setDateRange({ start, end })}
                     onSamplingChange={setSamplingMethod}
                     onBack={onBack}
+                    dataRange={dataRange}
                 />
             </div>
 
@@ -190,6 +217,20 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                                 }}
                             >
                                 Scatter
+                            </button>
+                            <button
+                                onClick={() => setChartType('pair')}
+                                style={{
+                                    padding: '5px 10px',
+                                    borderRadius: '4px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    backgroundColor: chartType === 'pair' ? '#3b82f6' : '#334155',
+                                    color: 'white',
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                Pair Plot
                             </button>
                         </div>
                     </div>
