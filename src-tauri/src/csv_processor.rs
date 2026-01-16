@@ -9,7 +9,7 @@ pub struct CsvRecord {
     pub values: Vec<Option<f64>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProcessedData {
     pub headers: Vec<String>,
     pub rows: Vec<CsvRecord>,

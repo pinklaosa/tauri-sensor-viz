@@ -1,10 +1,14 @@
 import { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { invoke } from "@tauri-apps/api/core";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { ProcessedData, CsvMetadata, SensorMetadata, CsvRecord } from '../types';
 import DataTable from './DataTable';
 import Chart from './Chart';
 import FilterPanel from './FilterPanel';
 import SensorSelection from './SensorSelection';
+import AddSensorModal from './AddSensorModal';
+import { Plus } from 'lucide-react';
+
 
 interface DashboardProps {
     metadata: CsvMetadata;
@@ -26,33 +30,73 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
     const [chartData, setChartData] = useState<ProcessedData | null>(null);
     const [loading, setLoading] = useState(false);
 
-    // Fetch data when sensors change (using deferred value to debounce/unblock UI)
+    // Fetch data when sensors change
     useEffect(() => {
+        let unlistenChunk: UnlistenFn | undefined;
+        let unlistenEnd: UnlistenFn | undefined;
+
         const fetchData = async () => {
+            // Reset state
+            // setChartData(null); // Keep previous data to prevent flickering
+
             if (deferredSensors.length === 0) {
                 setChartData({ headers: [], rows: [] });
                 return;
             }
 
             setLoading(true);
+            const accumRows: CsvRecord[] = [];
+            let headers: string[] = [];
+
             try {
-                console.time("invoke_get_data");
-                const data = await invoke<ProcessedData>("get_data", { sensors: deferredSensors });
-                console.timeEnd("invoke_get_data");
-                setChartData(data);
+                // Setup listeners BEFORE invoking
+                unlistenChunk = await listen<ProcessedData>('data-stream-chunk', (event) => {
+                    const chunk = event.payload;
+                    if (headers.length === 0) {
+                        headers = chunk.headers;
+                    }
+                    accumRows.push(...chunk.rows);
+
+                    // Optional: Update intermediate state if we want real-time visualization
+                    // But for performance, usually better to wait or throttle updates.
+                    // Here we will just accumulate and update at end for safety/simplicity first,
+                    // or we could update setChartData incrementally if desired.
+                    // Given the request is about "sending as chunk", let's wait for end for the *chart*
+                    // render to avoid thrashing, or maybe show a progress count.
+                });
+
+                unlistenEnd = await listen('data-stream-end', () => {
+                    setChartData({
+                        headers: headers.length > 0 ? headers : deferredSensors,
+                        rows: accumRows
+                    });
+                    setLoading(false);
+                });
+
+                console.time("invoke_get_data_stream");
+                // invoke now just starts the process
+                await invoke("get_data", { sensors: deferredSensors });
+                console.timeEnd("invoke_get_data_stream");
+
             } catch (err) {
                 console.error("Failed to fetch data:", err);
-            } finally {
                 setLoading(false);
             }
         };
 
         fetchData();
+
+        return () => {
+            if (unlistenChunk) unlistenChunk();
+            if (unlistenEnd) unlistenEnd();
+        };
+
     }, [deferredSensors]);
 
     const [dateRange, setDateRange] = useState<{ start: string, end: string } | null>(null);
     const [chartType, setChartType] = useState<'line' | 'scatter' | 'pair'>('line');
     const [samplingMethod, setSamplingMethod] = useState<'raw' | 'avg' | 'max' | 'min' | 'first' | 'last'>('raw');
+    const [isAddSensorModalOpen, setIsAddSensorModalOpen] = useState(false);
 
     // Filter logic (Client side filtering of the fetched subset)
     const filteredData = useMemo(() => {
@@ -96,7 +140,7 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
         });
 
         const aggregated: CsvRecord[] = [];
-        // Map is insertion ordered mostly, but let's sort keys to be safe if needed, 
+        // Map is insertion ordered mostly, but let's sort keys to be safe if needed,
         // though usually iterating map keys matches insertion order which follows time if data is sorted.
         // Data from backend is likely sorted by time.
 
@@ -105,7 +149,7 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
 
             // For each sensor column
             for (let i = 0; i < chartData.headers.length; i++) {
-                // Should match index of sensorHeaders? No, chartData.headers includes Timestamp usually? 
+                // Should match index of sensorHeaders? No, chartData.headers includes Timestamp usually?
                 // Wait, chartData.headers from backend likely includes "timestamp" or similar.
                 // Let's check chartData structure.
                 // Actually, ProcessedData usually has headers matching values indices.
@@ -234,11 +278,11 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                             </button>
                         </div>
                     </div>
-                    <div className="chart-wrapper">
+                    <div className="chart-wrapper" style={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
                         {chartData && (
                             <Chart
                                 data={filteredData} // Use filteredData which is simplified
-                                sensors={deferredSensors}
+                                sensors={chartData.headers} // Keep using loaded headers to avoid mismatch during load
                                 headers={chartData.headers}
                                 chartType={chartType}
                             />
@@ -260,6 +304,15 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                                 sensorMetadata={sensorMetadata}
                             />
                         </div>
+                        <div className="widget-footer">
+                            <button
+                                className="add-sensor-btn"
+                                onClick={() => setIsAddSensorModalOpen(true)}
+                            >
+                                <Plus size={16} />
+                                Add Special Sensor
+                            </button>
+                        </div>
                     </div>
 
                     <div className="widget-section">
@@ -273,6 +326,11 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                     </div>
                 </div>
             </div>
+            <AddSensorModal
+                isOpen={isAddSensorModalOpen}
+                onClose={() => setIsAddSensorModalOpen(false)}
+            />
         </div>
     );
 }
+

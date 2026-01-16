@@ -1,7 +1,7 @@
 mod csv_processor;
 use csv_processor::{load_metadata, read_csv, CsvMetadata, ProcessedData, SensorMetadata};
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Emitter, State};
 
 struct AppState(Mutex<Option<ProcessedData>>);
 
@@ -20,14 +20,13 @@ fn load_csv(path: String, state: State<AppState>) -> Result<CsvMetadata, String>
 }
 
 #[tauri::command]
-fn get_data(sensors: Vec<String>, state: State<AppState>) -> Result<ProcessedData, String> {
+fn get_data(
+    sensors: Vec<String>,
+    window: tauri::Window,
+    state: State<AppState>,
+) -> Result<(), String> {
     let state_data = state.0.lock().map_err(|e| e.to_string())?;
     let data = state_data.as_ref().ok_or("No data loaded")?;
-
-    // Always include timestamp (assuming it's usually the first column or identified by name,
-    // but here we'll take the implementation that relies on how data is stored.
-    // The previous implementation of ProcessedData has all columns in `values`.
-    // We need to filter `values` based on `headers`.
 
     // Find indices of requested sensors
     let mut indices = Vec::new();
@@ -36,33 +35,53 @@ fn get_data(sensors: Vec<String>, state: State<AppState>) -> Result<ProcessedDat
             indices.push(idx);
         }
     }
+    
+    // Using chunks to stream data
+    // Chunk size 5000 seems reasonable for UI responsiveness vs IPC overhead
+    const CHUNK_SIZE: usize = 5000;
+    
+    // Notify start (optional, but good for UI loading state if needed)
+    // window.emit("data-stream-start", data.rows.len()).map_err(|e| e.to_string())?;
 
-    let filtered_rows = data
-        .rows
-        .iter()
-        .map(|row| {
-            let mut new_values = Vec::new();
-            // Since CsvRecord values map 1:1 to headers (with None for timestamp column),
-            // we essentially just pick the values at the matching indices.
-            for &idx in &indices {
-                if idx < row.values.len() {
-                    new_values.push(row.values[idx]);
-                } else {
-                    new_values.push(None);
+    for (chunk_idx, chunk) in data.rows.chunks(CHUNK_SIZE).enumerate() {
+        let chunk_data: Vec<csv_processor::CsvRecord> = chunk
+            .iter()
+            .map(|row| {
+                let mut new_values = Vec::new();
+                for &idx in &indices {
+                    if idx < row.values.len() {
+                        new_values.push(row.values[idx]);
+                    } else {
+                        new_values.push(None);
+                    }
                 }
-            }
 
-            csv_processor::CsvRecord {
-                timestamp: row.timestamp.clone(),
-                values: new_values,
-            }
-        })
-        .collect();
+                csv_processor::CsvRecord {
+                    timestamp: row.timestamp.clone(),
+                    values: new_values,
+                }
+            })
+            .collect();
 
-    Ok(ProcessedData {
-        headers: sensors,
-        rows: filtered_rows,
-    })
+        // Emit chunk
+         window
+            .emit(
+                "data-stream-chunk",
+                ProcessedData {
+                    headers: sensors.clone(),
+                    rows: chunk_data,
+                },
+            )
+            .map_err(|e| e.to_string())?;
+            
+        // Optional: Yield to event loop if needed, but in a command it might not help much unless async.
+        // But since this is regular command, it runs on a thread pool (tauri default).
+    }
+
+    // Emit end
+    window.emit("data-stream-end", {}).map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 #[tauri::command]
