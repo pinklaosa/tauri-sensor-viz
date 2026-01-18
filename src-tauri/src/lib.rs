@@ -6,8 +6,8 @@ use tauri::{Emitter, State};
 struct AppState(Mutex<Option<ProcessedData>>);
 
 #[tauri::command]
-fn load_csv(path: String, state: State<AppState>) -> Result<CsvMetadata, String> {
-    let data = read_csv(&path)?;
+fn load_csv(paths: Vec<String>, state: State<AppState>) -> Result<CsvMetadata, String> {
+    let data = csv_processor::read_merge_csvs(paths)?;
     let metadata = CsvMetadata {
         headers: data.headers.clone(),
         total_rows: data.rows.len(),

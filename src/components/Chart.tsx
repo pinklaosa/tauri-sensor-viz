@@ -9,6 +9,7 @@ interface MainChartProps extends ChartProps {
 }
 
 function Chart({ data, sensors, headers, chartType = 'line' }: MainChartProps) {
+
     if (!sensors || sensors.length === 0) {
         return <div style={{ color: '#94a3b8', textAlign: 'center', marginTop: '20%' }}>Select sensors to view data</div>;
     }

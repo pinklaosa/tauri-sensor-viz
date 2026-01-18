@@ -31,6 +31,8 @@ pub struct SensorMetadata {
 
 use rayon::prelude::*;
 
+use std::collections::{BTreeMap, HashSet};
+
 pub fn read_csv(path: &str) -> Result<ProcessedData, String> {
     let total_start = Instant::now();
     // Parse data
@@ -40,7 +42,7 @@ pub fn read_csv(path: &str) -> Result<ProcessedData, String> {
 
     // Get headers
     let headers = rdr.headers().map_err(|e| e.to_string())?.clone();
-    let header_list: Vec<String> = headers.iter().map(|s| s.to_string()).collect();
+    let header_list: Vec<String> = headers.iter().map(|s| s.trim().to_string()).collect();
 
     // Identify timestamp column index
     let timestamp_idx = header_list
@@ -96,6 +98,132 @@ pub fn read_csv(path: &str) -> Result<ProcessedData, String> {
     Ok(ProcessedData {
         headers: header_list,
         rows: records,
+    })
+}
+
+pub fn read_merge_csvs(paths: Vec<String>) -> Result<ProcessedData, String> {
+    if paths.is_empty() {
+        return Err("No file paths provided".to_string());
+    }
+
+    // 1. Read all files individually
+    let mut datasets = Vec::new();
+    for path in &paths {
+        datasets.push(read_csv(path)?);
+    }
+
+    if datasets.is_empty() {
+        return Err("No data loaded".to_string());
+    }
+
+    // 2. Determine global headers (Superset)
+    // Start with the first dataset's headers
+    let mut global_headers: Vec<String> = Vec::new();
+    let mut seen_headers: HashSet<String> = HashSet::new();
+
+    // Helper to check if a header is a timestamp
+    let is_timestamp = |h: &str| h.eq_ignore_ascii_case("timestamp") || h.eq_ignore_ascii_case("time");
+
+    // Find valid timestamp header from first dataset to be the canonical "timestamp" column
+    // Actually, we want to maintain the "timestamp" column at a specific position or simply identify it.
+    // Let's assume the first dataset has a valid timestamp column or we pick one.
+    // read_csv keeps all headers, including timestamp.
+
+    // Let's iterate datasets and merge headers.
+    // We treat "timestamp"/"time" as a special unique key column.
+    
+    // We will use the timestamp column name from the first dataset as the canonical one in global headers.
+    // If not found, default to "timestamp".
+    let canonical_ts_header = datasets[0].headers.iter()
+        .find(|h| is_timestamp(h))
+        .cloned()
+        .unwrap_or_else(|| "timestamp".to_string());
+
+    // Initialize global headers with canonical timestamp
+    global_headers.push(canonical_ts_header.clone());
+    seen_headers.insert(canonical_ts_header.clone().to_lowercase());
+
+    // Add other headers
+    for ds in &datasets {
+        for h in &ds.headers {
+            if is_timestamp(h) {
+                continue; // Already handled canonical timestamp
+            }
+            if !seen_headers.contains(&h.to_lowercase()) {
+                global_headers.push(h.clone());
+                seen_headers.insert(h.to_lowercase());
+            }
+        }
+    }
+
+    // 3. Merge Rows
+    // Map: Timestamp -> Vector of Values (size = global_headers.len())
+    // Note: values in CsvRecord include the timestamp column as None.
+    // We need to map local column indices to global column indices.
+
+    // Use BTreeMap to sort by timestamp automatically
+    let mut merged_map: BTreeMap<String, Vec<Option<f64>>> = BTreeMap::new();
+
+    for ds in &datasets {
+        // Build column mapping: local_idx -> global_idx
+        let mut col_map: Vec<usize> = Vec::with_capacity(ds.headers.len());
+        for h in &ds.headers {
+            if is_timestamp(h) {
+                // Map to the canonical timestamp index (0)
+                col_map.push(0);
+            } else {
+                // Find index in global_headers
+                // This is O(N*M), but N (headers) is small usually.
+                if let Some(pos) = global_headers.iter().position(|gh| gh.eq_ignore_ascii_case(h)) {
+                    col_map.push(pos);
+                } else {
+                     // Should not happen as we built global_headers from all headers
+                     col_map.push(0); // Fallback, though unsafe if logic wrong
+                }
+            }
+        }
+
+        for row in &ds.rows {
+            if let Some(ts) = &row.timestamp {
+                let entry = merged_map
+                    .entry(ts.clone())
+                    .or_insert_with(|| vec![None; global_headers.len()]);
+                
+                for (local_idx, val) in row.values.iter().enumerate() {
+                    if local_idx < col_map.len() {
+                         let global_idx = col_map[local_idx];
+                         // If we have a value, overwrite/fill.
+                         // Note: timestamp col in 'values' is None, so it won't overwrite valid data at global_idx 0 if we put data there.
+                         // But index 0 is canonical timestamp, and 'values' stores None for timestamp.
+                         if let Some(v) = val {
+                             entry[global_idx] = Some(*v);
+                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Convert back to ProcessedData
+    let merged_rows: Vec<CsvRecord> = merged_map
+        .into_iter()
+        .map(|(ts, values)| CsvRecord {
+            timestamp: Some(ts),
+            values,
+        })
+        .collect();
+
+    println!("Merged {} files. Total rows: {}", datasets.len(), merged_rows.len());
+    if !merged_rows.is_empty() {
+        println!("Timestamp Range: {:?} - {:?}", 
+            merged_rows.first().and_then(|r| r.timestamp.as_ref()), 
+            merged_rows.last().and_then(|r| r.timestamp.as_ref())
+        );
+    }
+
+    Ok(ProcessedData {
+        headers: global_headers,
+        rows: merged_rows,
     })
 }
 

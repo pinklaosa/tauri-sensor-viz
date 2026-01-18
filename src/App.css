@@ -832,3 +832,22 @@ tr:hover {
     height: 100vh; /* Ensure full height usage */
     box-sizing: border-box;
 }
+
+/* Custom Scrollbar for ImportScreen */
+.custom-scrollbar::-webkit-scrollbar {
+    height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}

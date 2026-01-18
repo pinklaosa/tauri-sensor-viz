@@ -8,7 +8,7 @@ export default function TitleBar() {
         <div className="titlebar">
             <div className="titlebar-drag-region" data-tauri-drag-region>
                 {/* You can add app icon and title here */}
-                <span style={{ pointerEvents: 'none' }}>Exploring Data</span>
+                <span style={{ pointerEvents: 'none' }}>Soothsayer-Wizard</span>
             </div>
             <div className="titlebar-actions">
                 <button className="titlebar-button" onClick={() => { console.log('minimize'); appWindow.minimize(); }}>
