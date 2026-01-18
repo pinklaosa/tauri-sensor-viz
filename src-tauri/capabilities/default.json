@@ -13,6 +13,16 @@
     "core:window:allow-close",
     "core:window:allow-start-dragging",
     "opener:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "bin/backend",
+          "cmd": "backend",
+          "sidecar": true
+        }
+      ]
+    },
     "dialog:default"
   ]
 }

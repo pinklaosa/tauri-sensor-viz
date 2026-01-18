@@ -290,31 +290,54 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
             {/* 2. Metadata Section */}
             <div style={sectionBoxStyle}>
                 <div style={sectionTitleStyle}>2. Metadata (Single file)</div>
-                <div
-                    style={metadataDropZoneStyle}
-                    onClick={handleSelectMetadataFile}
-                    onMouseEnter={(e) => {
-                        if (!loading) {
-                            e.currentTarget.style.borderColor = '#3b82f6';
-                            e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
-                        }
-                    }}
-                    onMouseLeave={(e) => {
-                        if (!loading) {
-                            e.currentTarget.style.borderColor = '#475569';
-                            e.currentTarget.style.background = 'rgba(30, 41, 59, 0.3)';
-                        }
-                    }}
-                >
-                    <span style={{ color: '#94a3b8', fontSize: '0.9rem', flex: 1, textAlign: 'center' }}>
-                        {metadataFilePath
-                            ? `Selected: ${metadataFilePath.split(/[/\\]/).pop()}`
-                            : "Drag & drop or click to browse for metadata file"}
-                    </span>
-                    <div style={{ marginRight: '1rem' }}>
-                        <Upload size={20} color="#94a3b8" />
+                {metadataFilePath ? (
+                    <div style={{ ...fileCardStyle, width: '100%', maxWidth: '97%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
+                            <FileText size={20} color="#94a3b8" />
+                            <span style={{
+                                fontSize: '0.9rem', color: '#e2e8f0',
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                            }} title={metadataFilePath.split(/[/\\]/).pop()}>
+                                {metadataFilePath.split(/[/\\]/).pop()}
+                            </span>
+                        </div>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setMetadataFilePath(null);
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4, display: 'flex' }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = '#64748b'}
+                        >
+                            <X size={20} />
+                        </button>
                     </div>
-                </div>
+                ) : (
+                    <div
+                        style={metadataDropZoneStyle}
+                        onClick={handleSelectMetadataFile}
+                        onMouseEnter={(e) => {
+                            if (!loading) {
+                                e.currentTarget.style.borderColor = '#3b82f6';
+                                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                            }
+                        }}
+                        onMouseLeave={(e) => {
+                            if (!loading) {
+                                e.currentTarget.style.borderColor = '#475569';
+                                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.3)';
+                            }
+                        }}
+                    >
+                        <span style={{ color: '#94a3b8', fontSize: '0.9rem', flex: 1, textAlign: 'center' }}>
+                            Drag & drop or click to browse for metadata file
+                        </span>
+                        <div style={{ marginRight: '1rem' }}>
+                            <Upload size={20} color="#94a3b8" />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Action Button */}

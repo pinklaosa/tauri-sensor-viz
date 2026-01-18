@@ -17,6 +17,20 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ metadata, sensorMetadata, onBack }: DashboardProps) {
+    const [analysisResult, setAnalysisResult] = useState<string>("");
+
+    const handleAnalysis = async () => {
+        try {
+            const result = await invoke<string>("run_python_analysis");
+            console.log("Python Analysis Result:", result);
+            setAnalysisResult(result);
+            alert("Analysis Result: " + result);
+        } catch (e) {
+            console.error("Analysis Failed:", e);
+            alert("Analysis Failed: " + String(e));
+        }
+    };
+
     const sensorHeaders = useMemo(() =>
         metadata.headers.filter(h => {
             const lower = h.trim().toLowerCase();
@@ -275,6 +289,21 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                                 }}
                             >
                                 Pair Plot
+                            </button>
+                            <button
+                                onClick={handleAnalysis}
+                                style={{
+                                    padding: '5px 10px',
+                                    borderRadius: '4px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    backgroundColor: '#10b981',
+                                    color: 'white',
+                                    fontWeight: 'bold',
+                                    marginLeft: '10px'
+                                }}
+                            >
+                                Run Python Analysis
                             </button>
                         </div>
                     </div>
