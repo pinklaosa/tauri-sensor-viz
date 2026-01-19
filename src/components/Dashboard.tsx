@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { invoke } from "@tauri-apps/api/core";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { listen, emit, UnlistenFn } from "@tauri-apps/api/event";
 import { ProcessedData, CsvMetadata, SensorMetadata, CsvRecord } from '../types';
 import DataTable from './DataTable';
 import Chart from './Chart';
 import FilterPanel from './FilterPanel';
 import SensorSelection from './SensorSelection';
-import AddSensorModal from './AddSensorModal';
+
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { Plus } from 'lucide-react';
 
 
@@ -105,12 +106,46 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
             if (unlistenEnd) unlistenEnd();
         };
 
+        // Event handling for Add Sensor Window communication
+        useEffect(() => {
+            let unlistenRequest: UnlistenFn | undefined;
+            let unlistenAdd: UnlistenFn | undefined;
+
+            const setupListeners = async () => {
+                // Listen for request from child window
+                unlistenRequest = await listen('request-sensors', () => {
+                    emit('sensors-data', {
+                        sensors: sensorHeaders,
+                        selectedSensors: selectedSensors,
+                        sensorMetadata: sensorMetadata
+                    });
+                });
+
+                // Listen for new selections from child window
+                unlistenAdd = await listen<string[]>('add-sensor-selection', (event) => {
+                    const newSelection = event.payload;
+                    // Merge with existing or replace? User asked to "Add", but logic usually implies extending.
+                    // If the window sends the *full* new list, we just set it.
+                    // If it sends *only new ones*, we merge.
+                    // Let's assume the window sends the FULL desired set of selected sensors for simplicity/sync.
+                    setSelectedSensors(newSelection);
+                });
+            };
+
+            setupListeners();
+
+            return () => {
+                if (unlistenRequest) unlistenRequest();
+                if (unlistenAdd) unlistenAdd();
+            };
+        }, [sensorHeaders, selectedSensors, sensorMetadata]);
+
     }, [deferredSensors]);
 
     const [dateRange, setDateRange] = useState<{ start: string, end: string } | null>(null);
     const [chartType, setChartType] = useState<'line' | 'scatter' | 'pair'>('line');
     const [samplingMethod, setSamplingMethod] = useState<'raw' | 'avg' | 'max' | 'min' | 'first' | 'last'>('raw');
-    const [isAddSensorModalOpen, setIsAddSensorModalOpen] = useState(false);
+
 
     // Filter logic (Client side filtering of the fetched subset)
     const filteredData = useMemo(() => {
@@ -336,7 +371,22 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                         <div className="widget-footer">
                             <button
                                 className="add-sensor-btn"
-                                onClick={() => setIsAddSensorModalOpen(true)}
+                                onClick={async () => {
+                                    const webview = new WebviewWindow('add-sensor', {
+                                        url: '/?window=add-sensor',
+                                        title: 'Add Special Sensor',
+                                        width: 800,
+                                        height: 1000,
+                                        alwaysOnTop: false
+                                    });
+                                    await webview.once('tauri://created', function () {
+                                        // webview window successfully created
+                                    });
+                                    await webview.once('tauri://error', function (e) {
+                                        // an error happened creating the webview window
+                                        console.error(e);
+                                    });
+                                }}
                             >
                                 <Plus size={16} />
                                 Add Special Sensor
@@ -349,16 +399,12 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                             <h3>Data Insight</h3>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{filteredData.length} Rows</span>
                         </div>
-                        <div className="widget-content table-wrapper-compact">
+                        <div className="widget-content">
                             {chartData && <DataTable headers={chartData.headers} data={filteredData} />}
                         </div>
                     </div>
                 </div>
             </div>
-            <AddSensorModal
-                isOpen={isAddSensorModalOpen}
-                onClose={() => setIsAddSensorModalOpen(false)}
-            />
         </div>
     );
 }

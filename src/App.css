@@ -433,6 +433,14 @@ body {
 
 /* Data Table */
 .table-wrapper-compact {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.table-container {
+    flex: 1;
     overflow: auto;
 }
 
@@ -451,6 +459,7 @@ th {
     position: sticky;
     top: 0;
     white-space: nowrap;
+    z-index: 10;
 }
 
 td {
@@ -471,6 +480,8 @@ tr:hover {
     gap: 1rem;
     padding: 0.75rem;
     border-top: 1px solid var(--border);
+    background: var(--card-bg);
+    flex-shrink: 0;
 }
 
 .pagination button {
