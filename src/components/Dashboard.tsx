@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useDeferredValue } from 'react';
+import { useState, useMemo, useEffect, useDeferredValue, useRef } from 'react';
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit, UnlistenFn } from "@tauri-apps/api/event";
 import { ProcessedData, CsvMetadata, SensorMetadata, CsvRecord } from '../types';
@@ -107,13 +107,22 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
         };
 
         // Event handling for Add Sensor Window communication
+        // Use ref to keep track of latest state without re-binding listeners
+        const stateRef = useRef({ sensorHeaders, selectedSensors, sensorMetadata });
+        useEffect(() => {
+            stateRef.current = { sensorHeaders, selectedSensors, sensorMetadata };
+        }, [sensorHeaders, selectedSensors, sensorMetadata]);
+
         useEffect(() => {
             let unlistenRequest: UnlistenFn | undefined;
             let unlistenAdd: UnlistenFn | undefined;
 
             const setupListeners = async () => {
+                console.log("Setting up Dashboard listeners");
                 // Listen for request from child window
                 unlistenRequest = await listen('request-sensors', () => {
+                    console.log("Dashboard received 'request-sensors', emitting data...");
+                    const { sensorHeaders, selectedSensors, sensorMetadata } = stateRef.current;
                     emit('sensors-data', {
                         sensors: sensorHeaders,
                         selectedSensors: selectedSensors,
@@ -123,12 +132,8 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
 
                 // Listen for new selections from child window
                 unlistenAdd = await listen<string[]>('add-sensor-selection', (event) => {
-                    const newSelection = event.payload;
-                    // Merge with existing or replace? User asked to "Add", but logic usually implies extending.
-                    // If the window sends the *full* new list, we just set it.
-                    // If it sends *only new ones*, we merge.
-                    // Let's assume the window sends the FULL desired set of selected sensors for simplicity/sync.
-                    setSelectedSensors(newSelection);
+                    console.log("Dashboard received 'add-sensor-selection'", event.payload);
+                    setSelectedSensors(event.payload);
                 });
             };
 
@@ -138,7 +143,7 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                 if (unlistenRequest) unlistenRequest();
                 if (unlistenAdd) unlistenAdd();
             };
-        }, [sensorHeaders, selectedSensors, sensorMetadata]);
+        }, []);
 
     }, [deferredSensors]);
 

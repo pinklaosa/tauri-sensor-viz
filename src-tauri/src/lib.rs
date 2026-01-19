@@ -85,6 +85,13 @@ fn get_data(
 }
 
 #[tauri::command]
+fn get_all_sensors(state: State<AppState>) -> Result<Vec<String>, String> {
+    let state_data = state.0.lock().map_err(|e| e.to_string())?;
+    let data = state_data.as_ref().ok_or("No data loaded")?;
+    Ok(data.headers.clone())
+}
+
+#[tauri::command]
 fn load_metadata_command(path: String) -> Result<Vec<SensorMetadata>, String> {
     load_metadata(&path)
 }
@@ -159,6 +166,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_csv,
             get_data,
+            get_all_sensors,
             load_metadata_command,
             run_python_analysis
         ])
