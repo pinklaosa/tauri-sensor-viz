@@ -1,18 +1,29 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ImportScreen from "./components/ImportScreen";
 import Dashboard from "./components/Dashboard";
 import { CsvMetadata, SensorMetadata } from "./types";
-import "./App.css";
 
 import TitleBar from "./components/TitleBar";
 
 function App() {
   const [metadata, setMetadata] = useState<CsvMetadata | null>(null);
   const [sensorMetadata, setSensorMetadata] = useState<SensorMetadata[] | null>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
 
   return (
     <>
-      <TitleBar />
+      <TitleBar theme={theme} toggleTheme={toggleTheme} />
       <main className="app-container">
         {!metadata ? (
           <ImportScreen onDataReady={(csv, sensor) => {

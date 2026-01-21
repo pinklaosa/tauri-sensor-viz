@@ -18,7 +18,7 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ metadata, sensorMetadata, onBack }: DashboardProps) {
-    const [analysisResult, setAnalysisResult] = useState<string>("");
+    const [_, setAnalysisResult] = useState<string>("");
 
     const handleAnalysis = async () => {
         try {
@@ -297,7 +297,7 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                                     cursor: 'pointer',
                                     backgroundColor: chartType === 'line' ? '#3b82f6' : '#334155',
                                     color: 'white',
-                                    fontWeight: 'bold'
+                                    fontSize: '14px'
                                 }}
                             >
                                 Line
@@ -311,7 +311,7 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                                     cursor: 'pointer',
                                     backgroundColor: chartType === 'scatter' ? '#3b82f6' : '#334155',
                                     color: 'white',
-                                    fontWeight: 'bold'
+                                    fontSize: '14px'
                                 }}
                             >
                                 Scatter
@@ -325,7 +325,7 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                                     cursor: 'pointer',
                                     backgroundColor: chartType === 'pair' ? '#3b82f6' : '#334155',
                                     color: 'white',
-                                    fontWeight: 'bold'
+                                    fontSize: '14px'
                                 }}
                             >
                                 Pair Plot
@@ -339,8 +339,8 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                                     cursor: 'pointer',
                                     backgroundColor: '#10b981',
                                     color: 'white',
-                                    fontWeight: 'bold',
-                                    marginLeft: '10px'
+                                    marginLeft: '10px',
+                                    fontSize: '14px'
                                 }}
                             >
                                 Run Python Analysis
@@ -381,8 +381,9 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                                         url: '/?window=add-sensor',
                                         title: 'Add Special Sensor',
                                         width: 800,
-                                        height: 1000,
-                                        alwaysOnTop: false
+                                        height: 700,
+                                        alwaysOnTop: false,
+                                        decorations: false
                                     });
                                     await webview.once('tauri://created', function () {
                                         // webview window successfully created

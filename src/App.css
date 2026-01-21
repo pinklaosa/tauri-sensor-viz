@@ -1,13 +1,27 @@
+@import "tailwindcss";
+
 :root {
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
+    --bg-primary: #09090b;
+    --bg-secondary: #18181b;
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
     --accent-color: #3b82f6;
-    --border: #334155;
-    --card-bg: #1e293b;
-    --input-bg: #0f172a;
-    --hover-bg: #334155;
+    --border: #27272a;
+    --card-bg: #18181b;
+    --input-bg: #09090b;
+    --hover-bg: #27272a;
+}
+
+[data-theme="light"] {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --accent-color: #3b82f6;
+    --border: #cbd5e1;
+    --card-bg: #ffffff;
+    --input-bg: #ffffff;
+    --hover-bg: #f1f5f9;
 }
 
 body {
@@ -688,7 +702,8 @@ tr:hover {
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 0.75rem;
-    padding: 0; /* Clear padding significantly as we structure it inside */
+    padding: 0;
+    /* Clear padding significantly as we structure it inside */
     width: 90%;
     max-width: 500px;
     display: flex;
@@ -756,9 +771,9 @@ tr:hover {
     color: white;
     border: none;
     border-radius: 0.5rem;
-    padding: 0.75rem;
+    padding: 0.4rem;
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     cursor: pointer;
     transition: background 0.2s;
     display: flex;
@@ -772,13 +787,25 @@ tr:hover {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 @keyframes slideUp {
-    from { transform: translateY(20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 /* Custom TitleBar */
@@ -840,7 +867,8 @@ tr:hover {
 /* Adjust application container to account for fixed titlebar */
 .app-container {
     padding-top: 32px;
-    height: 100vh; /* Ensure full height usage */
+    height: 100vh;
+    /* Ensure full height usage */
     box-sizing: border-box;
 }
 

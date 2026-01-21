@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import AddSensorWindow from "./components/AddSensorWindow";
+import "./App.css";
 
 const urlParams = new URLSearchParams(window.location.search);
 const windowType = urlParams.get("window");

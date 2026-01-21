@@ -120,7 +120,7 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
 
     // Inline styles for the specific glowing look
     const containerStyle: React.CSSProperties = {
-        background: '#0f172a',
+        background: 'var(--bg-primary)',
         width: '100%',
         height: '100%',
         display: 'flex',
@@ -128,7 +128,7 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '2rem',
-        color: '#fff',
+        color: 'var(--text-primary)',
         fontFamily: 'Inter, sans-serif'
     };
 
@@ -138,15 +138,16 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
         marginBottom: '1rem',
         fontSize: '1.5rem',
         fontWeight: 'bold',
-        textAlign: 'left'
+        textAlign: 'left',
+        color: 'var(--text-primary)'
     };
 
     const sectionBoxStyle: React.CSSProperties = {
         width: '100%',
         maxWidth: '800px',
-        background: 'rgba(30, 41, 59, 0.4)',
+        background: 'var(--card-bg)',
         borderRadius: '12px',
-        border: '1px solid #334155',
+        border: '1px solid var(--border)',
         padding: '1.5rem',
         marginBottom: '1.5rem',
         position: 'relative',
@@ -159,21 +160,22 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
         marginBottom: '1rem',
         display: 'flex',
         alignItems: 'center',
-        color: '#e2e8f0'
+        color: 'var(--text-primary)'
     };
 
     const dropZoneStyle: React.CSSProperties = {
-        border: '2px dashed #475569',
+        border: '2px dashed var(--border)',
         borderRadius: '12px',
         height: '160px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
-        background: 'rgba(30, 41, 59, 0.3)',
+        background: 'var(--bg-secondary)',
         cursor: loading ? 'default' : 'pointer',
         marginBottom: '1rem',
-        transition: 'all 0.2s ease'
+        transition: 'all 0.2s ease',
+        color: 'var(--text-secondary)'
     };
 
     const metadataDropZoneStyle: React.CSSProperties = {
@@ -185,7 +187,7 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
     };
 
     const iconGlowStyle: React.CSSProperties = {
-        color: '#94a3b8',
+        color: 'var(--text-secondary)',
         marginBottom: '10px'
     };
 
@@ -198,7 +200,7 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
     };
 
     const fileCardStyle: React.CSSProperties = {
-        background: 'rgba(51, 65, 85, 0.6)',
+        background: 'var(--bg-secondary)',
         borderRadius: '8px',
         padding: '0.75rem',
         minWidth: '220px',
@@ -206,15 +208,15 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        border: '1px solid rgba(148, 163, 184, 0.2)'
+        border: '1px solid var(--border)'
     };
 
     const buttonStyle: React.CSSProperties = {
-        background: 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)',
+        background: 'var(--accent-color)',
         border: 'none',
         padding: '0.75rem 2rem',
         borderRadius: '2rem',
-        color: 'white',
+        color: '#ffffff',
         fontWeight: 600,
         fontSize: '1rem',
         cursor: 'pointer',
@@ -238,21 +240,21 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
                     onClick={handleSelectDataFile}
                     onMouseEnter={(e) => {
                         if (!loading) {
-                            e.currentTarget.style.borderColor = '#3b82f6';
-                            e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                            e.currentTarget.style.borderColor = 'var(--accent-color)';
+                            e.currentTarget.style.background = 'var(--hover-bg)';
                         }
                     }}
                     onMouseLeave={(e) => {
                         if (!loading) {
-                            e.currentTarget.style.borderColor = '#475569';
-                            e.currentTarget.style.background = 'rgba(30, 41, 59, 0.3)';
+                            e.currentTarget.style.borderColor = 'var(--border)';
+                            e.currentTarget.style.background = 'var(--bg-secondary)';
                         }
                     }}
                 >
                     <div style={iconGlowStyle}>
                         <FileText size={48} strokeWidth={1.5} />
                     </div>
-                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
                         Drag & drop or click to browse drop a file
                     </span>
                 </div>
@@ -262,10 +264,10 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
                         {dataFilePaths.map((path, index) => (
                             <div key={index} style={fileCardStyle}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
-                                    <File size={24} color="#94a3b8" />
+                                    <File size={24} color="var(--text-secondary)" />
                                     <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                                         <span style={{
-                                            fontSize: '0.8rem', color: '#e2e8f0',
+                                            fontSize: '0.8rem', color: 'var(--text-primary)',
                                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
                                         }} title={path.split(/[/\\]/).pop()}>
                                             {path.split(/[/\\]/).pop()}
@@ -275,9 +277,9 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
                                 </div>
                                 <button
                                     onClick={(e) => handleRemoveFile(index, e)}
-                                    style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4, display: 'flex' }}
+                                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4, display: 'flex' }}
                                     onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
-                                    onMouseLeave={(e) => e.currentTarget.style.color = '#64748b'}
+                                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
                                 >
                                     <X size={16} />
                                 </button>
@@ -293,9 +295,9 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
                 {metadataFilePath ? (
                     <div style={{ ...fileCardStyle, width: '100%', maxWidth: '97%' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
-                            <FileText size={20} color="#94a3b8" />
+                            <FileText size={20} color="var(--text-secondary)" />
                             <span style={{
-                                fontSize: '0.9rem', color: '#e2e8f0',
+                                fontSize: '0.9rem', color: 'var(--text-primary)',
                                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
                             }} title={metadataFilePath.split(/[/\\]/).pop()}>
                                 {metadataFilePath.split(/[/\\]/).pop()}
@@ -306,9 +308,9 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
                                 e.stopPropagation();
                                 setMetadataFilePath(null);
                             }}
-                            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 4, display: 'flex' }}
+                            style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 4, display: 'flex' }}
                             onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
-                            onMouseLeave={(e) => e.currentTarget.style.color = '#64748b'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
                         >
                             <X size={20} />
                         </button>
@@ -319,22 +321,22 @@ export default function ImportScreen({ onDataReady }: ImportScreenProps) {
                         onClick={handleSelectMetadataFile}
                         onMouseEnter={(e) => {
                             if (!loading) {
-                                e.currentTarget.style.borderColor = '#3b82f6';
-                                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                                e.currentTarget.style.borderColor = 'var(--accent-color)';
+                                e.currentTarget.style.background = 'var(--hover-bg)';
                             }
                         }}
                         onMouseLeave={(e) => {
                             if (!loading) {
-                                e.currentTarget.style.borderColor = '#475569';
-                                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.3)';
+                                e.currentTarget.style.borderColor = 'var(--border)';
+                                e.currentTarget.style.background = 'var(--bg-secondary)';
                             }
                         }}
                     >
-                        <span style={{ color: '#94a3b8', fontSize: '0.9rem', flex: 1, textAlign: 'center' }}>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', flex: 1, textAlign: 'center' }}>
                             Drag & drop or click to browse for metadata file
                         </span>
                         <div style={{ marginRight: '1rem' }}>
-                            <Upload size={20} color="#94a3b8" />
+                            <Upload size={20} color="var(--text-secondary)" />
                         </div>
                     </div>
                 )}

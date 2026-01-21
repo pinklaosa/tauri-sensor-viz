@@ -1,7 +1,12 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Minus, Square, X } from 'lucide-react';
+import { Minus, Square, X, Sun, Moon } from 'lucide-react';
 
-export default function TitleBar() {
+interface TitleBarProps {
+    theme: 'light' | 'dark';
+    toggleTheme: () => void;
+}
+
+export default function TitleBar({ theme, toggleTheme }: TitleBarProps) {
     const appWindow = getCurrentWindow();
 
     return (
@@ -11,6 +16,14 @@ export default function TitleBar() {
                 <span style={{ pointerEvents: 'none' }}>Soothsayer-Wizard</span>
             </div>
             <div className="titlebar-actions">
+                <button className="titlebar-button" onClick={toggleTheme} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+                    {theme === 'dark' ? (
+                        <Sun size={16} />
+                    ) : (
+                        <Moon size={16} />
+                    )}
+                </button>
+                <div style={{ width: '1px', height: '16px', background: 'var(--border)', margin: 'auto 0' }}></div>
                 <button className="titlebar-button" onClick={() => { console.log('minimize'); appWindow.minimize(); }}>
                     <Minus size={16} />
                 </button>

@@ -3,20 +3,34 @@ use csv_processor::{load_metadata, CsvMetadata, ProcessedData, SensorMetadata};
 use std::sync::Mutex;
 use tauri::{Emitter, State};
 
-struct AppState(Mutex<Option<ProcessedData>>);
+struct SessionData {
+    data: ProcessedData,
+    paths: Vec<String>,
+}
+
+struct AppState(Mutex<Option<SessionData>>);
 
 #[tauri::command]
 fn load_csv(paths: Vec<String>, state: State<AppState>) -> Result<CsvMetadata, String> {
-    let data = csv_processor::read_merge_csvs(paths)?;
+    let data = csv_processor::read_merge_csvs(paths.clone())?;
     let metadata = CsvMetadata {
         headers: data.headers.clone(),
         total_rows: data.rows.len(),
     };
 
-    let mut state_data = state.0.lock().map_err(|e| e.to_string())?;
-    *state_data = Some(data);
+    let mut state_lock = state.0.lock().map_err(|e| e.to_string())?;
+    *state_lock = Some(SessionData { data, paths });
 
     Ok(metadata)
+}
+
+#[tauri::command]
+fn get_loaded_paths(state: State<AppState>) -> Result<Vec<String>, String> {
+    let state_lock = state.0.lock().map_err(|e| e.to_string())?;
+    match &*state_lock {
+        Some(session) => Ok(session.paths.clone()),
+        None => Ok(Vec::new()),
+    }
 }
 
 #[tauri::command]
@@ -25,8 +39,9 @@ fn get_data(
     window: tauri::Window,
     state: State<AppState>,
 ) -> Result<(), String> {
-    let state_data = state.0.lock().map_err(|e| e.to_string())?;
-    let data = state_data.as_ref().ok_or("No data loaded")?;
+    let state_lock = state.0.lock().map_err(|e| e.to_string())?;
+    let session = state_lock.as_ref().ok_or("No data loaded")?;
+    let data = &session.data;
 
     // Find indices of requested sensors
     let mut indices = Vec::new();
@@ -35,11 +50,11 @@ fn get_data(
             indices.push(idx);
         }
     }
-    
+
     // Using chunks to stream data
     // Chunk size 5000 seems reasonable for UI responsiveness vs IPC overhead
     const CHUNK_SIZE: usize = 5000;
-    
+
     // Notify start (optional, but good for UI loading state if needed)
     // window.emit("data-stream-start", data.rows.len()).map_err(|e| e.to_string())?;
 
@@ -64,7 +79,7 @@ fn get_data(
             .collect();
 
         // Emit chunk
-         window
+        window
             .emit(
                 "data-stream-chunk",
                 ProcessedData {
@@ -73,22 +88,24 @@ fn get_data(
                 },
             )
             .map_err(|e| e.to_string())?;
-            
+
         // Optional: Yield to event loop if needed, but in a command it might not help much unless async.
         // But since this is regular command, it runs on a thread pool (tauri default).
     }
 
     // Emit end
-    window.emit("data-stream-end", {}).map_err(|e| e.to_string())?;
+    window
+        .emit("data-stream-end", {})
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
 #[tauri::command]
 fn get_all_sensors(state: State<AppState>) -> Result<Vec<String>, String> {
-    let state_data = state.0.lock().map_err(|e| e.to_string())?;
-    let data = state_data.as_ref().ok_or("No data loaded")?;
-    Ok(data.headers.clone())
+    let state_lock = state.0.lock().map_err(|e| e.to_string())?;
+    let session = state_lock.as_ref().ok_or("No data loaded")?;
+    Ok(session.data.headers.clone())
 }
 
 #[tauri::command]
@@ -96,14 +113,18 @@ fn load_metadata_command(path: String) -> Result<Vec<SensorMetadata>, String> {
     load_metadata(&path)
 }
 
-use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
 async fn run_python_analysis(app: tauri::AppHandle) -> Result<String, String> {
     // Use mock data for testing
     let data = ProcessedData {
-        headers: vec!["Timestamp".to_string(), "SensorA".to_string(), "SensorB".to_string()],
+        headers: vec![
+            "Timestamp".to_string(),
+            "SensorA".to_string(),
+            "SensorB".to_string(),
+        ],
         rows: vec![
             csv_processor::CsvRecord {
                 timestamp: Some("2021-01-01T00:00:00Z".to_string()),
@@ -119,7 +140,7 @@ async fn run_python_analysis(app: tauri::AppHandle) -> Result<String, String> {
             },
         ],
     };
-    
+
     // Serialize data to JSON string
     let json_data = serde_json::to_string(&data).map_err(|e| e.to_string())?;
 
@@ -131,9 +152,11 @@ async fn run_python_analysis(app: tauri::AppHandle) -> Result<String, String> {
     println!("Rust: Writing data to stdin...");
     let mut data_with_newline = json_data.clone();
     data_with_newline.push('\n');
-    child.write(data_with_newline.as_bytes()).map_err(|e| e.to_string())?;
+    child
+        .write(data_with_newline.as_bytes())
+        .map_err(|e| e.to_string())?;
     println!("Rust: Data written.");
-    
+
     // Read stdout
     let mut output = String::new();
     while let Some(event) = rx.recv().await {
@@ -143,8 +166,8 @@ async fn run_python_analysis(app: tauri::AppHandle) -> Result<String, String> {
                 output.push_str(&line_str);
             }
             CommandEvent::Stderr(line) => {
-                 let line_str = String::from_utf8(line).map_err(|e| e.to_string())?;
-                 println!("Python Error: {}", line_str);
+                let line_str = String::from_utf8(line).map_err(|e| e.to_string())?;
+                println!("Python Error: {}", line_str);
             }
             CommandEvent::Terminated(_) => {
                 break;
@@ -152,7 +175,7 @@ async fn run_python_analysis(app: tauri::AppHandle) -> Result<String, String> {
             _ => {}
         }
     }
-    
+
     Ok(output)
 }
 
@@ -168,7 +191,8 @@ pub fn run() {
             get_data,
             get_all_sensors,
             load_metadata_command,
-            run_python_analysis
+            run_python_analysis,
+            get_loaded_paths
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

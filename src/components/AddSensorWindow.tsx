@@ -1,15 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
-import { emit, listen, UnlistenFn } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { SensorMetadata } from "../types";
-import SensorSelection from "./SensorSelection";
-
-interface SensorDataEvent {
-    sensors: string[];
-    selectedSensors: string[];
-    sensorMetadata: SensorMetadata[] | null;
-}
+import SensorExplorer from "./SensorExplorer";
+import SelectedSensorList from "./SelectedSensorList";
 
 export default function AddSensorWindow() {
     const [sensors, setSensors] = useState<string[]>([]);
@@ -17,48 +12,51 @@ export default function AddSensorWindow() {
     const [sensorMetadata, setSensorMetadata] = useState<SensorMetadata[] | null>(null);
     const [loading, setLoading] = useState(true);
 
+    // UI State
+    const [searchTerm, setSearchTerm] = useState("");
+
     useEffect(() => {
-        let unlistenData: UnlistenFn | undefined;
+        // Load theme from localStorage
+        const theme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+
+        let unlistenData: (() => void) | undefined;
 
         const setup = async () => {
-            // 1. Fetch all sensors from Rust AppState directly
+            // 1. Listen for data from Dashboard (Rich data with metadata)
+            unlistenData = await listen<{
+                sensors: string[],
+                selectedSensors: string[],
+                sensorMetadata: SensorMetadata[]
+            }>('sensors-data', (event) => {
+                console.log("Received sensors-data:", event.payload);
+                setSensors(event.payload.sensors);
+                setSelectedSensors(event.payload.selectedSensors);
+                setSensorMetadata(event.payload.sensorMetadata);
+                setLoading(false);
+            });
+
+            // 2. Request data
+            await emit('request-sensors');
+
+            // 3. Fallback logic
             try {
                 const allHeaders = await invoke<string[]>('get_all_sensors');
-                // Filter out timestamp/time
-                const filteredSensors = allHeaders.filter(h => {
-                    const lower = h.trim().toLowerCase();
-                    return lower !== 'timestamp' && lower !== 'time';
-                });
-
-                setSensors(filteredSensors);
+                if (allHeaders.length > 0) {
+                    setSensors(prev => prev.length === 0 ? allHeaders.filter(h => h.trim().toLowerCase() !== 'timestamp') : prev);
+                    setLoading(false);
+                } else {
+                    const paths = await invoke<string[]>('get_loaded_paths');
+                    if (paths && paths.length > 0) {
+                        await invoke("load_csv", { paths });
+                        const retriedHeaders = await invoke<string[]>('get_all_sensors');
+                        setSensors(prev => prev.length === 0 ? retriedHeaders.filter(h => h.trim().toLowerCase() !== 'timestamp') : prev);
+                        setLoading(false);
+                    }
+                }
             } catch (err) {
-                console.error("Failed to fetch sensors from Rust:", err);
+                console.warn("Fallback loading failed:", err);
             }
-
-            // Request data immediately (for selection/metadata)
-            // Retry mechanism in case Dashboard wasn't ready to listen
-            const requestData = async () => {
-                console.log("Emitting request-sensors...");
-                await emit('request-sensors');
-            };
-
-            requestData();
-            // Retry every 1s
-            const intervalId = setInterval(requestData, 1000);
-
-            // Stop retrying after 5s or when component unmounts
-            const timeoutId = setTimeout(() => clearInterval(intervalId), 5000);
-
-            // We also need to clear interval when we successfully receive data
-            unlistenData = await listen<SensorDataEvent>('sensors-data', (event) => {
-                console.log("Received sensors-data");
-                const { selectedSensors, sensorMetadata } = event.payload;
-                // Note: we ignore 'sensors' from event as we fetched it from Rust
-                setSelectedSensors(selectedSensors);
-                setSensorMetadata(sensorMetadata);
-                setLoading(false);
-                clearInterval(intervalId); // Stop retrying
-            });
         };
 
         setup();
@@ -67,17 +65,6 @@ export default function AddSensorWindow() {
             if (unlistenData) unlistenData();
         };
     }, []);
-
-    // Sort sensors: Selected first, then alphabetical
-    const sortedSensors = useMemo(() => {
-        return [...sensors].sort((a, b) => {
-            const aSelected = selectedSensors.includes(a);
-            const bSelected = selectedSensors.includes(b);
-            if (aSelected && !bSelected) return -1;
-            if (!aSelected && bSelected) return 1;
-            return a.localeCompare(b);
-        });
-    }, [sensors, selectedSensors]);
 
     const handleClose = async () => {
         await getCurrentWindow().close();
@@ -88,46 +75,79 @@ export default function AddSensorWindow() {
         await handleClose();
     };
 
+    const handleSensorToggle = (sensor: string) => {
+        setSelectedSensors(prev => {
+            if (prev.includes(sensor)) {
+                return prev.filter(s => s !== sensor);
+            } else {
+                return [...prev, sensor];
+            }
+        });
+    };
+
+    // Filter Logic for Explorer (passed down, or just pass filtered list?)
+    // SensorExplorer now handles grouping. We should pass the FILTERED list to it?
+    // Or pass all and let it filter?
+    // Current SensorExplorer implementation takes `sensors` and `sensorMetadata`.
+    // It groups what it receives. So we should filter BEFORE passing if we want search to work effectively
+    // across the whole tree (or let Explorer handle search internally? Explorer props has searchTerm).
+    // Let's pass the filtered list to Explorer so it only renders matching nodes.
+    // Let's pass the filtered list to Explorer so it only renders matching nodes.
+
+    const filteredSensors = useMemo(() => {
+        if (!searchTerm) return sensors;
+        const lowerTerm = searchTerm.toLowerCase();
+        return sensors.filter(s => {
+            const meta = sensorMetadata?.find(m => m.tag === s);
+            const searchStr = meta
+                ? `${s} ${meta.description} ${meta.component} ${meta.unit}`.toLowerCase()
+                : s.toLowerCase();
+            return searchStr.includes(lowerTerm);
+        });
+    }, [sensors, searchTerm, sensorMetadata]);
+
+
     return (
-        <div className="add-sensor-window p-4 h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col">
-            <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 className="text-xl font-bold">Add Special Sensor</h2>
-                <button
-                    onClick={handleClose}
-                    className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                >
-                    &times;
-                </button>
+        <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+            {/* Header */}
+            <div data-tauri-drag-region className="flex justify-between items-center px-4 py-3 shrink-0" style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border)' }}>
+                <h2 className="text-sm font-semibold pointer-events-none" style={{ color: 'var(--text-primary)' }}>Add Special Sensor</h2>
+                <button onClick={handleClose} className="hover:opacity-80" style={{ color: 'var(--text-secondary)' }}>&times;</button>
             </div>
 
-            <div className="flex-1 overflow-y-auto min-h-0 border border-[var(--border-color)] rounded-md bg-[var(--bg-secondary)] mb-4">
-                {loading ? (
-                    <div className="p-4 text-center text-[var(--text-secondary)]">Loading sensor data...</div>
-                ) : (
-                    <div className="p-2">
-                        <SensorSelection
-                            sensors={sortedSensors}
-                            selectedSensors={selectedSensors}
-                            onSensorChange={setSelectedSensors}
+            {/* Main Content (2-Pane Grid) */}
+            <div className="flex-1 grid grid-cols-[1fr_250px] min-h-0 divide-x" style={{ borderColor: 'var(--border)' }}>
+
+                {/* Left: Explorer (Tree + Selection) */}
+                <div className="overflow-hidden">
+                    {loading ? (
+                        <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-secondary)' }}>Loading...</div>
+                    ) : (
+                        <SensorExplorer
+                            sensors={filteredSensors}
                             sensorMetadata={sensorMetadata}
+                            selectedSensors={selectedSensors}
+                            onToggleSensor={handleSensorToggle}
+                            searchTerm={searchTerm}
+                            onSearchChange={setSearchTerm}
                         />
-                    </div>
-                )}
+                    )}
+                </div>
+
+                {/* Right: Selected List */}
+                <div className="overflow-hidden">
+                    <SelectedSensorList
+                        selectedSensors={selectedSensors}
+                        sensorMetadata={sensorMetadata}
+                        onRemove={(s) => handleSensorToggle(s)}
+                    />
+                </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-2 border-t border-[var(--border-color)] flex-shrink-0">
-                <button
-                    onClick={handleClose}
-                    className="px-4 py-2 rounded bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)]"
-                >
-                    Cancel
-                </button>
-                <button
-                    onClick={handleAdd}
-                    className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium"
-                >
-                    Update Sensors
-                </button>
+            {/* Footer */}
+            <div className="flex justify-end gap-2 px-4 py-3 border-t shrink-0" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
+                <button onClick={handleClose} className="px-4 py-1.5 rounded text-sm" style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>Cancel</button>
+                <button onClick={handleAdd} className="px-4 py-1.5 rounded text-white text-sm font-medium" style={{ backgroundColor: 'var(--accent-color)' }}>Update Sensors</button>
             </div>
         </div>
     );

@@ -98,8 +98,8 @@ export default function SensorSelection({
     };
 
     return (
-        <div className="sensor-selection-widget">
-            <div className="widget-header" style={{ flexDirection: 'column', gap: '8px', alignItems: 'stretch' }}>
+        <div className="sensor-selection-widget h-full flex flex-col">
+            <div className="widget-header flex-shrink-0" style={{ flexDirection: 'column', gap: '8px', alignItems: 'stretch' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <input
                         type="text"
@@ -186,7 +186,7 @@ export default function SensorSelection({
                 </div>
             </div>
 
-            <div className="sensor-list-widget">
+            <div className="sensor-list-widget flex-1 min-h-0 overflow-y-auto">
                 <div className="sensor-list-header-row">
                     <span>Sensor</span>
                     <span>Component</span>
