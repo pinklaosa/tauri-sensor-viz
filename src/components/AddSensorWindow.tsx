@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import Split from 'split.js';
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
@@ -16,9 +17,25 @@ export default function AddSensorWindow() {
     const [searchTerm, setSearchTerm] = useState("");
 
     useEffect(() => {
+        // Initialize Split.js
+        const splitInstance = Split(['#split-0', '#split-1'], {
+            sizes: [75, 25],
+            minSize: [300, 150],
+            gutterSize: 5,
+            cursor: 'col-resize',
+            direction: 'horizontal',
+        });
+
+        return () => {
+            splitInstance.destroy();
+        };
+    }, []);
+
+    useEffect(() => {
         // Load theme from localStorage
         const theme = localStorage.getItem('theme') || 'dark';
         document.documentElement.setAttribute('data-theme', theme);
+
 
         let unlistenData: (() => void) | undefined;
 
@@ -115,32 +132,44 @@ export default function AddSensorWindow() {
                 <button onClick={handleClose} className="hover:opacity-80" style={{ color: 'var(--text-secondary)' }}>&times;</button>
             </div>
 
-            {/* Main Content (2-Pane Grid) */}
-            <div className="flex-1 grid grid-cols-[1fr_250px] min-h-0 divide-x" style={{ borderColor: 'var(--border)' }}>
-
-                {/* Left: Explorer (Tree + Selection) */}
-                <div className="overflow-hidden">
-                    {loading ? (
-                        <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-secondary)' }}>Loading...</div>
-                    ) : (
-                        <SensorExplorer
-                            sensors={filteredSensors}
-                            sensorMetadata={sensorMetadata}
+            {/* Main Content (Split.js) */}
+            <div className="flex-1 flex min-h-0 overflow-hidden">
+                {/* Left: Selected List + Explorer */}
+                <div id="split-0" className="flex flex-col h-full min-h-0 divide-y" style={{ borderColor: 'var(--border)' }}>
+                    {/* Top: Selected List */}
+                    <div className="h-1/3 min-h-0 overflow-hidden">
+                        <SelectedSensorList
                             selectedSensors={selectedSensors}
-                            onToggleSensor={handleSensorToggle}
-                            searchTerm={searchTerm}
-                            onSearchChange={setSearchTerm}
+                            sensorMetadata={sensorMetadata}
+                            onRemove={(s) => handleSensorToggle(s)}
                         />
-                    )}
+                    </div>
+
+                    {/* Bottom: Explorer */}
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                        {loading ? (
+                            <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-secondary)' }}>Loading...</div>
+                        ) : (
+                            <SensorExplorer
+                                sensors={filteredSensors}
+                                sensorMetadata={sensorMetadata}
+                                selectedSensors={selectedSensors}
+                                onToggleSensor={handleSensorToggle}
+                                searchTerm={searchTerm}
+                                onSearchChange={setSearchTerm}
+                            />
+                        )}
+                    </div>
                 </div>
 
-                {/* Right: Selected List */}
-                <div className="overflow-hidden">
-                    <SelectedSensorList
-                        selectedSensors={selectedSensors}
-                        sensorMetadata={sensorMetadata}
-                        onRemove={(s) => handleSensorToggle(s)}
-                    />
+                {/* Right: Tooling */}
+                <div id="split-1" className="flex flex-col h-full overflow-hidden" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                    <div className="px-4 py-2 text-xs font-bold tracking-wider uppercase border-b" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
+                        Tooling
+                    </div>
+                    <div className="flex-1">
+                        {/* Tooling content will go here */}
+                    </div>
                 </div>
             </div>
 

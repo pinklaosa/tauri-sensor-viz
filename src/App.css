@@ -890,3 +890,13 @@ tr:hover {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #64748b;
 }
+/* Split JS Gutters */
+.gutter {
+    background-color: var(--border);
+    background-repeat: no-repeat;
+    background-position: 50%;
+}
+
+.gutter.gutter-horizontal {
+    cursor: col-resize;
+}

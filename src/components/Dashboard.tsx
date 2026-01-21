@@ -382,6 +382,7 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                                         title: 'Add Special Sensor',
                                         width: 800,
                                         height: 700,
+                                        center: true,
                                         alwaysOnTop: false,
                                         decorations: false
                                     });
