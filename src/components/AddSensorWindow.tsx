@@ -3,15 +3,16 @@ import Split from 'split.js';
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
-import { SensorMetadata } from "../types";
+import { SensorMetadata, SensorOperationConfig } from "../types";
 import SensorExplorer from "./SensorExplorer";
-import SelectedSensorList from "./SelectedSensorList";
+import SensorTooling from "./SensorTooling";
 
 export default function AddSensorWindow() {
     const [sensors, setSensors] = useState<string[]>([]);
     const [selectedSensors, setSelectedSensors] = useState<string[]>([]);
     const [sensorMetadata, setSensorMetadata] = useState<SensorMetadata[] | null>(null);
     const [loading, setLoading] = useState(true);
+    const [operationConfig, setOperationConfig] = useState<SensorOperationConfig | null>(null);
 
     // UI State
     const [searchTerm, setSearchTerm] = useState("");
@@ -19,7 +20,7 @@ export default function AddSensorWindow() {
     useEffect(() => {
         // Initialize Split.js
         const splitInstance = Split(['#split-0', '#split-1'], {
-            sizes: [75, 25],
+            sizes: [60, 40],
             minSize: [300, 150],
             gutterSize: 5,
             cursor: 'col-resize',
@@ -88,8 +89,38 @@ export default function AddSensorWindow() {
     };
 
     const handleAdd = async () => {
-        await emit('add-sensor-selection', selectedSensors);
-        await handleClose();
+        if (operationConfig?.mode === 'single' && selectedSensors.length > 1) {
+            alert("Only one sensor allowed for Single Calculation mode!");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // If operation config is set, perform calculation on backend
+            if (operationConfig) {
+                const newSensorName = await invoke<string>('calculate_new_sensor', {
+                    sensors: selectedSensors,
+                    config: operationConfig
+                });
+
+                // After calculation, we want to select the NEW sensor AND the input sensors.
+                await emit('add-sensor-selection', {
+                    sensors: [...selectedSensors, newSensorName],
+                    operation: null // Reset operation since it's now a "real" sensor
+                });
+            } else {
+                // No operation, just adding selected sensors
+                await emit('add-sensor-selection', {
+                    sensors: selectedSensors,
+                    operation: null
+                });
+            }
+            await handleClose();
+        } catch (err) {
+            console.error("Failed to update sensor:", err);
+            alert("Failed to update sensor: " + String(err));
+            setLoading(false);
+        }
     };
 
     const handleSensorToggle = (sensor: string) => {
@@ -135,17 +166,9 @@ export default function AddSensorWindow() {
             {/* Main Content (Split.js) */}
             <div className="flex-1 flex min-h-0 overflow-hidden">
                 {/* Left: Selected List + Explorer */}
+                {/* Left: Explorer Only */}
                 <div id="split-0" className="flex flex-col h-full min-h-0 divide-y" style={{ borderColor: 'var(--border)' }}>
-                    {/* Top: Selected List */}
-                    <div className="h-1/3 min-h-0 overflow-hidden">
-                        <SelectedSensorList
-                            selectedSensors={selectedSensors}
-                            sensorMetadata={sensorMetadata}
-                            onRemove={(s) => handleSensorToggle(s)}
-                        />
-                    </div>
-
-                    {/* Bottom: Explorer */}
+                    {/* Explorer */}
                     <div className="flex-1 min-h-0 overflow-hidden">
                         {loading ? (
                             <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-secondary)' }}>Loading...</div>
@@ -167,8 +190,13 @@ export default function AddSensorWindow() {
                     <div className="px-4 py-2 text-xs font-bold tracking-wider uppercase border-b" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
                         Tooling
                     </div>
-                    <div className="flex-1">
-                        {/* Tooling content will go here */}
+                    <div className="flex-1 overflow-hidden">
+                        <SensorTooling
+                            selectedSensors={selectedSensors}
+                            sensorMetadata={sensorMetadata}
+                            onConfigChange={setOperationConfig}
+                            onRemoveSensor={handleSensorToggle}
+                        />
                     </div>
                 </div>
             </div>

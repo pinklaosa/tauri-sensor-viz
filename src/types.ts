@@ -19,3 +19,19 @@ export interface SensorMetadata {
     unit: string;
     component: string;
 }
+
+export type SingleOperationType = 'add' | 'subtract' | 'multiply' | 'divide' | 'power';
+export type MultiOperationType = 'sum' | 'mean' | 'median' | 'product' | 'subtract' | 'divide';
+
+export interface SensorOperationConfig {
+    mode: 'single' | 'multi';
+    singleOp?: {
+        type: SingleOperationType;
+        value: number;
+    };
+    multiOp?: {
+        type: MultiOperationType;
+        baseSensor?: string;
+    };
+    customName?: string;
+}

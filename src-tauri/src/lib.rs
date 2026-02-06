@@ -1,5 +1,6 @@
 mod csv_processor;
 use csv_processor::{load_metadata, CsvMetadata, ProcessedData, SensorMetadata};
+use serde::Deserialize;
 use std::sync::Mutex;
 use tauri::{Emitter, State};
 
@@ -179,6 +180,212 @@ async fn run_python_analysis(app: tauri::AppHandle) -> Result<String, String> {
     Ok(output)
 }
 
+#[derive(Debug, Deserialize)]
+struct SingleOperation {
+    #[serde(rename = "type")]
+    op_type: String, // 'add', 'subtract', 'multiply', 'divide', 'power'
+    value: f64,
+}
+
+#[derive(Debug, Deserialize)]
+struct MultiOperation {
+    #[serde(rename = "type")]
+    op_type: String, // 'sum', 'mean', 'median', 'product', 'subtract', 'divide'
+    #[serde(rename = "baseSensor")]
+    base_sensor: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SensorOperationConfig {
+    mode: String, // 'single', 'multi'
+    #[serde(rename = "singleOp")]
+    single_op: Option<SingleOperation>,
+    #[serde(rename = "multiOp")]
+    multi_op: Option<MultiOperation>,
+    #[serde(rename = "customName")]
+    custom_name: Option<String>,
+}
+
+#[tauri::command]
+fn calculate_new_sensor(
+    sensors: Vec<String>,
+    config: SensorOperationConfig,
+    state: State<AppState>,
+) -> Result<String, String> {
+    let mut state_lock = state.0.lock().map_err(|e| e.to_string())?;
+    let session = state_lock.as_mut().ok_or("No data loaded")?;
+    let data = &mut session.data;
+
+    // Validation
+    if sensors.is_empty() {
+        return Err("No sensors selected".to_string());
+    }
+
+    // Identify indices
+    let mut indices = Vec::new();
+    for sensor in &sensors {
+        match data.headers.iter().position(|h| h == sensor) {
+            Some(idx) => indices.push(idx),
+            None => return Err(format!("Sensor not found: {}", sensor)),
+        }
+    }
+
+    // Determine new sensor name and logic
+    let mut new_sensor_name;
+
+    if config.mode == "single" {
+        if sensors.len() != 1 {
+            return Err("Single mode requires exactly one sensor".to_string());
+        }
+        let op = config.single_op.ok_or("Missing singleOp config")?;
+        let op_symbol = match op.op_type.as_str() {
+            "add" => "+",
+            "subtract" => "-",
+            "multiply" => "*",
+            "divide" => "/",
+            "power" => "^",
+            _ => return Err("Invalid single operation type".to_string()),
+        };
+        new_sensor_name = format!("{} {} {}", sensors[0], op_symbol, op.value);
+
+        // Calculation Loop
+        for row in &mut data.rows {
+            let val = row.values[indices[0]];
+            let new_val = match val {
+                Some(v) => match op.op_type.as_str() {
+                    "add" => Some(v + op.value),
+                    "subtract" => Some(v - op.value),
+                    "multiply" => Some(v * op.value),
+                    "divide" => {
+                        if op.value != 0.0 {
+                            Some(v / op.value)
+                        } else {
+                            None
+                        }
+                    } // Handle div by zero?
+                    "power" => Some(v.powf(op.value)),
+                    _ => None,
+                },
+                None => None,
+            };
+            row.values.push(new_val);
+        }
+    } else if config.mode == "multi" {
+        let op = config.multi_op.ok_or("Missing multiOp config")?;
+
+        let op_name = match op.op_type.as_str() {
+            "sum" => "Sum",
+            "mean" => "Avg",
+            "median" => "Median",
+            "product" => "Product",
+            "subtract" => "Diff",
+            "divide" => "Ratio",
+            _ => return Err("Invalid multi operation type".to_string()),
+        };
+
+        if op.op_type == "subtract" || op.op_type == "divide" {
+            let base = op
+                .base_sensor
+                .as_ref()
+                .ok_or("Missing base sensor for subtract/divide")?;
+            new_sensor_name = format!("{}({}, others)", op_name, base);
+        } else {
+            new_sensor_name = format!("{}({:?})", op_name, sensors);
+        }
+
+        // Calculation Loop
+        for row in &mut data.rows {
+            let mut valid_values = Vec::new();
+            let mut base_val = None;
+
+            // For subtract/divide, separate base from others
+            if op.op_type == "subtract" || op.op_type == "divide" {
+                let base_sensor = op.base_sensor.as_ref().ok_or("Missing base sensor")?;
+                // Find base index logic (re-find or use pre-calc indices?)
+                // We relied on `sensors` list. The frontend should pass `baseSensor` IN `sensors` list?
+                // Usually yes.
+                // Let's iterate `sensors` and map usage.
+
+                // Re-map values based on whether they are base or others
+                let mut others_sum = 0.0;
+                let mut count = 0;
+
+                for (i, sensor_name) in sensors.iter().enumerate() {
+                    let val_opt = row.values[indices[i]];
+                    if let Some(v) = val_opt {
+                        if sensor_name == base_sensor {
+                            base_val = Some(v);
+                        } else {
+                            others_sum += v;
+                            count += 1;
+                        }
+                    }
+                }
+
+                let new_val = match base_val {
+                    Some(b) => {
+                        if op.op_type == "subtract" {
+                            Some(b - others_sum)
+                        } else {
+                            if others_sum != 0.0 {
+                                Some(b / others_sum)
+                            } else {
+                                None
+                            }
+                        }
+                    }
+                    None => None,
+                };
+                row.values.push(new_val);
+            } else {
+                // Aggregation
+                for &idx in &indices {
+                    if let Some(v) = row.values[idx] {
+                        valid_values.push(v);
+                    }
+                }
+
+                let new_val = if valid_values.is_empty() {
+                    None
+                } else {
+                    match op.op_type.as_str() {
+                        "sum" => Some(valid_values.iter().sum()),
+                        "mean" => {
+                            Some(valid_values.iter().sum::<f64>() / valid_values.len() as f64)
+                        }
+                        "product" => Some(valid_values.iter().product()),
+                        "median" => {
+                            valid_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                            let mid = valid_values.len() / 2;
+                            if valid_values.len() % 2 == 0 {
+                                Some((valid_values[mid - 1] + valid_values[mid]) / 2.0)
+                            } else {
+                                Some(valid_values[mid])
+                            }
+                        }
+                        _ => None,
+                    }
+                };
+                row.values.push(new_val);
+            }
+        }
+    } else {
+        return Err("Invalid mode".to_string());
+    }
+
+    // Override with custom name if provided
+    if let Some(name) = config.custom_name {
+        if !name.trim().is_empty() {
+            new_sensor_name = name;
+        }
+    }
+
+    // Update Headers
+    data.headers.push(new_sensor_name.clone());
+
+    Ok(new_sensor_name)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -192,7 +399,8 @@ pub fn run() {
             get_all_sensors,
             load_metadata_command,
             run_python_analysis,
-            get_loaded_paths
+            get_loaded_paths,
+            calculate_new_sensor
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
