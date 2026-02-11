@@ -5,6 +5,8 @@
   "windows": [
     "main",
     "add-sensor",
+    "predictive-model",
+    "failure-group",
     "splashscreen"
   ],
   "permissions": [

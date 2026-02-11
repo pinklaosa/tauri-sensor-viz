@@ -8,7 +8,7 @@ import FilterPanel, { ValueFilter } from './FilterPanel';
 import SensorSelection from './SensorSelection';
 
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { Plus, ChevronUp, BarChart3, Radio, Table, Download, Filter, Calendar, ArrowRight } from 'lucide-react';
+import { Plus, EyeOff, BarChart3, Radio, Table, Download, Filter, Calendar, ArrowRight } from 'lucide-react';
 
 // Panel configuration
 const PANELS = {
@@ -149,14 +149,15 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
 
     // Event handling for Add Sensor Window communication
     // Use ref to keep track of latest state without re-binding listeners
-    const stateRef = useRef({ sensorHeaders, selectedSensors, sensorMetadata });
+    const stateRef = useRef({ sensorHeaders, selectedSensors, sensorMetadata, metadata });
     useEffect(() => {
-        stateRef.current = { sensorHeaders, selectedSensors, sensorMetadata };
-    }, [sensorHeaders, selectedSensors, sensorMetadata]);
+        stateRef.current = { sensorHeaders, selectedSensors, sensorMetadata, metadata };
+    }, [sensorHeaders, selectedSensors, sensorMetadata, metadata]);
 
     useEffect(() => {
         let unlistenRequest: UnlistenFn | undefined;
         let unlistenAdd: UnlistenFn | undefined;
+        let unlistenPredictive: UnlistenFn | undefined;
 
         const setupListeners = async () => {
             console.log("Setting up Dashboard listeners");
@@ -206,6 +207,16 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                     return changed ? newHeaders : prevHeaders;
                 });
             });
+            // Listen for request from failure group window
+            unlistenPredictive = await listen('request-failure-group-data', () => {
+                console.log("Dashboard received 'request-failure-group-data', emitting data...");
+                const { sensorHeaders, sensorMetadata, metadata } = stateRef.current;
+                emit('failure-group-data', {
+                    sensorHeaders,
+                    sensorMetadata,
+                    metadata
+                });
+            });
         };
 
         setupListeners();
@@ -213,6 +224,7 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
         return () => {
             if (unlistenRequest) unlistenRequest();
             if (unlistenAdd) unlistenAdd();
+            if (unlistenPredictive) unlistenPredictive();
         };
     }, []);
 
@@ -496,71 +508,21 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                     {!collapsedPanels.has('chart') ? (
                         <div className="chart-section-large">
                             <div className="section-header collapsible-header">
-                                <h3>Sensor Readings • {samplingMethod.toUpperCase()} (1h) • {visibleFilteredData.length.toLocaleString()} Points {loading && "(Loading...)"}</h3>
-                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                    <button
-                                        onClick={() => setChartType('line')}
-                                        style={{
-                                            padding: '5px 10px',
-                                            borderRadius: '4px',
-                                            border: 'none',
-                                            cursor: 'pointer',
-                                            backgroundColor: chartType === 'line' ? '#3b82f6' : '#334155',
-                                            color: 'white',
-                                            fontSize: '14px'
-                                        }}
-                                    >
-                                        Line
-                                    </button>
-                                    <button
-                                        onClick={() => setChartType('scatter')}
-                                        style={{
-                                            padding: '5px 10px',
-                                            borderRadius: '4px',
-                                            border: 'none',
-                                            cursor: 'pointer',
-                                            backgroundColor: chartType === 'scatter' ? '#3b82f6' : '#334155',
-                                            color: 'white',
-                                            fontSize: '14px'
-                                        }}
-                                    >
-                                        Scatter
-                                    </button>
-                                    <button
-                                        onClick={() => setChartType('pair')}
-                                        style={{
-                                            padding: '5px 10px',
-                                            borderRadius: '4px',
-                                            border: 'none',
-                                            cursor: 'pointer',
-                                            backgroundColor: chartType === 'pair' ? '#3b82f6' : '#334155',
-                                            color: 'white',
-                                            fontSize: '14px'
-                                        }}
-                                    >
-                                        Pair Plot
-                                    </button>
-                                    <button
-                                        onClick={handleAnalysis}
-                                        style={{
-                                            padding: '5px 10px',
-                                            borderRadius: '4px',
-                                            border: 'none',
-                                            cursor: 'pointer',
-                                            backgroundColor: '#10b981',
-                                            color: 'white',
-                                            marginLeft: '10px',
-                                            fontSize: '14px'
-                                        }}
-                                    >
-                                        Run Python Analysis
-                                    </button>
-                                    <button
-                                        className="collapse-btn"
-                                        onClick={() => togglePanel('chart')}
-                                        title="Collapse panel"
-                                    >
-                                        <ChevronUp size={16} />
+                                <div className="section-header-left">
+                                    <h3>Sensor Readings</h3>
+                                    <span className="section-badge">{samplingMethod.toUpperCase()} (1h)</span>
+                                    <span className="section-badge">{visibleFilteredData.length.toLocaleString()} Points</span>
+                                    {loading && <span className="section-badge section-badge-loading">Loading...</span>}
+                                </div>
+                                <div className="section-header-actions">
+                                    <div className="chart-type-group">
+                                        <button className={`chart-type-btn ${chartType === 'line' ? 'active' : ''}`} onClick={() => setChartType('line')}>Line</button>
+                                        <button className={`chart-type-btn ${chartType === 'scatter' ? 'active' : ''}`} onClick={() => setChartType('scatter')}>Scatter</button>
+                                        <button className={`chart-type-btn ${chartType === 'pair' ? 'active' : ''}`} onClick={() => setChartType('pair')}>Pair Plot</button>
+                                    </div>
+                                    <button className="chart-type-btn chart-type-btn-accent" onClick={handleAnalysis}>Run Python Analysis</button>
+                                    <button className="collapse-btn" onClick={() => togglePanel('chart')} title="Hide panel">
+                                        <EyeOff size={14} />
                                     </button>
                                 </div>
                             </div>
@@ -659,13 +621,13 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
 
                     {/* Data Insight Section */}
                     {!collapsedPanels.has('data') ? (
-                        <div className="widget-section data-widget" style={{ maxHeight: '400px', flex: '0 0 auto' }}>
+                        <div className="widget-section data-widget" style={collapsedPanels.has('chart') ? { flex: '1' } : { height: '400px', flex: '0 0 400px' }}>
                             <div className="section-header collapsible-header">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div className="section-header-left">
                                     <h3>Data Insight</h3>
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{visibleFilteredData.length} Rows</span>
+                                    <span className="section-badge">{visibleFilteredData.length} Rows</span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div className="section-header-actions">
                                     <button
                                         className="export-btn-header"
                                         onClick={() => {
@@ -704,9 +666,9 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                                     <button
                                         className="collapse-btn"
                                         onClick={() => togglePanel('data')}
-                                        title="Collapse panel"
+                                        title="Hide panel"
                                     >
-                                        <ChevronUp size={16} />
+                                        <EyeOff size={14} />
                                     </button>
                                 </div>
                             </div>
@@ -722,18 +684,18 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                 <div className="right-column">
                     {/* Sensors Section */}
                     {!collapsedPanels.has('sensors') ? (
-                        <div className="widget-section" style={{ maxHeight: '500px' }}>
+                        <div className="widget-section">
                             <div className="section-header collapsible-header">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div className="section-header-left">
                                     <h3>Recent Sensor Data</h3>
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{sensorHeaders.length} Sensors</span>
+                                    <span className="section-badge">{sensorHeaders.length} Sensors</span>
                                 </div>
                                 <button
                                     className="collapse-btn"
                                     onClick={() => togglePanel('sensors')}
-                                    title="Collapse panel"
+                                    title="Hide panel"
                                 >
-                                    <ChevronUp size={16} />
+                                    <EyeOff size={14} />
                                 </button>
                             </div>
                             <div className="widget-content">
@@ -779,15 +741,15 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                     {!collapsedPanels.has('filter') ? (
                         <div className="widget-section filter-widget">
                             <div className="section-header collapsible-header">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div className="section-header-left">
                                     <h3>Filter & Controls</h3>
                                 </div>
                                 <button
                                     className="collapse-btn"
                                     onClick={() => togglePanel('filter')}
-                                    title="Collapse panel"
+                                    title="Hide panel"
                                 >
-                                    <ChevronUp size={16} />
+                                    <EyeOff size={14} />
                                 </button>
                             </div>
                             <div className="widget-content filter-content">
@@ -804,21 +766,35 @@ export default function Dashboard({ metadata, sensorMetadata, onBack }: Dashboar
                     )}
 
                     {/* Save & Continue Section */}
-                    <div className="widget-section" style={{ flex: '0 0 auto', padding: '0.5rem 1rem' }}>
+                    <div className="save-continue-section">
                         <button
-                            className="primary-btn"
-                            style={{
-                                width: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '0.5rem',
-                                padding: '0.5rem 1rem',
-                                fontSize: '0.85rem'
-                            }}
-                            onClick={() => {
-                                // TODO: Add save logic here
-                                console.log('Save & Continue clicked');
+                            className="save-continue-btn"
+                            onClick={async () => {
+                                try {
+                                    const screenW = window.screen.width;
+                                    const screenH = window.screen.height;
+                                    const webview = new WebviewWindow('failure-group', {
+                                        url: '/?window=failure-group',
+                                        title: 'Predictive Mode - Failure Group Creation',
+                                        width: Math.round(screenW * 0.25),
+                                        height: Math.round(screenH * 0.8),
+                                        center: true,
+                                        decorations: false,
+                                    });
+                                    webview.once('tauri://created', async () => {
+                                        // Send data to new window
+                                        await emit('failure-group-data', {
+                                            sensorHeaders,
+                                            sensorMetadata,
+                                            metadata
+                                        });
+                                    });
+                                    webview.once('tauri://error', (e) => {
+                                        console.error('Failed to create failure group window:', e);
+                                    });
+                                } catch (err) {
+                                    console.error('Error opening failure group window:', err);
+                                }
                             }}
                         >
                             Save & Continue
